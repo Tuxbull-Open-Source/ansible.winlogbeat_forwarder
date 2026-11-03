@@ -4,6 +4,21 @@
 
 No unreleased changes.
 
+## [v1.3.0] - 2026-11-03
+
+### Changed
+
+- Migrate Galaxy identity to `tuxbull.winlogbeat_forwarder`.
+- Align the role dispatcher with the current Enterprise Ansible Role Template.
+- Add Galaxy-ready metadata, controller collection requirements, maintainer
+  guidance, and public role documentation.
+
+### Verified
+
+- Authorized Windows Server 2022 Winlogbeat installation, configuration
+  validation, controlled Graylog event receipt, uninstall cleanup, final
+  reinstall, and idempotency validation.
+
 ## [v1.2.0] - 2026-06-30
 
 ### Added
