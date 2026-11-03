@@ -1,137 +1,62 @@
-# Ansible Role: `joe-speedboat.winlogbeat_forwarder`
+# Winlogbeat forwarder role
 
-Windows-only Ansible role for forwarding **Windows Event Logs** to **Graylog** with **Winlogbeat** over the Graylog Beats input.
+Install Winlogbeat OSS on Windows Server and forward selected Windows Event
+Logs to a Graylog Beats input.
 
 ## Requirements
 
-### Control Node
+### Control node
 
-- Ansible >= 2.14
-- Windows collections: `ansible.windows` and `community.windows`
-
-Install or refresh the collections on the same Ansible/Rundeck controller environment that runs the playbook:
+- Ansible 2.15 or later.
+- `ansible.windows` and `community.windows` collections.
 
 ```bash
-ansible-galaxy collection install ansible.windows community.windows --force
+ansible-galaxy collection install ansible.windows community.windows
+ansible-doc ansible.windows.win_template >/dev/null
 ```
 
-Verify `win_template` is available:
+### Managed Windows host
 
-```bash
-ansible-doc ansible.windows.win_template >/dev/null && echo "ansible.windows.win_template OK"
-ansible-galaxy collection list | grep -E '^(ansible\.windows|community\.windows)\s'
-```
-
-`ansible.windows.win_template` renders Jinja locally on the controller before copying the rendered file to Windows. If the controller collection is missing, stale, or broken, the target may receive raw `.j2` content such as `{% for ... %}` / `{{ variable }}` and Winlogbeat fails validation with a YAML error.
-
-### Target Nodes
-
-- Windows Server 2019 / 2022 / 2025
-- WinRM configured
-- Outbound access to the Graylog Beats input, default `5044/tcp`
+- Windows Server 2019, 2022, or 2025.
+- WinRM access.
+- Network access to the Graylog Beats input, normally TCP port `5044`.
 
 ### Graylog
 
-Create a Beats input before deploying this role:
+Create a Beats input before deployment. Configure it to avoid adding a Beats
+`type` prefix to fields if you depend on the documented field names.
 
-| Log source | Graylog input | Port |
-|---|---|---|
-| Windows Event Logs | Beats | 5044 |
+## Installation
 
-For the Beats input, enable **Do not add Beats type as prefix** so fields are not renamed with a `winlogbeat_` prefix.
-
-## Quick Start
+```bash
+ansible-galaxy role install tuxbull.winlogbeat_forwarder
+```
 
 ```yaml
 - name: Forward Windows Event Logs to Graylog
   hosts: windows
   gather_facts: true
   roles:
-    - role: joe-speedboat.winlogbeat_forwarder
+    - role: tuxbull.winlogbeat_forwarder
       vars:
         winlogbeat_graylog_host: graylog.example.com
         winlogbeat_graylog_port: 5044
 ```
 
-## Uninstall
-
-```yaml
-- name: Uninstall Windows event forwarding
-  hosts: windows
-  gather_facts: true
-  tasks:
-    - ansible.builtin.include_role:
-        name: joe-speedboat.winlogbeat_forwarder
-        tasks_from: uninstall.yml
-```
-
 ## Variables
 
-### Graylog Connection
-
 | Variable | Default | Description |
-|---|---|---|
-| `winlogbeat_graylog_host` | `graylog.example.com` | Graylog Beats input host |
-| `winlogbeat_graylog_port` | `5044` | Graylog Beats input port |
+|---|---:|---|
+| `winlogbeat_version` | `9.4.2` | Winlogbeat OSS release. |
+| `winlogbeat_graylog_host` | `graylog.example.com` | Graylog Beats host. |
+| `winlogbeat_graylog_port` | `5044` | Graylog Beats port. |
+| `winlogbeat_event_log_groups` | all built-in groups | Curated event log groups to collect. |
+| `winlogbeat_event_logs` | unset | Complete manual event-channel override. |
+| `winlogbeat_download_mode` | `target` | `target` or `delegated` ZIP retrieval. |
+| `winlogbeat_service_state` | `started` | Desired service state. |
+| `winlogbeat_service_enabled` | `true` | Start Winlogbeat on boot. |
 
-### Winlogbeat Version and Paths
-
-| Variable | Default | Description |
-|---|---|---|
-| `winlogbeat_version` | `9.4.2` | Winlogbeat OSS version tested against Graylog Beats input |
-| `winlogbeat_install_root` | `C:\Program Files\Winlogbeat` | Base install directory |
-| `winlogbeat_data_dir` | `C:\ProgramData\Winlogbeat` | Data directory |
-| `winlogbeat_log_dir` | `C:\ProgramData\Winlogbeat\Logs` | Log directory |
-| `winlogbeat_download_dir` | `C:\Windows\Temp\winlogbeat` | Download directory |
-| `winlogbeat_download_mode` | `target` | Download strategy: `target` or `delegated` |
-| `winlogbeat_download_delegate` | `localhost` | Host that downloads the ZIP when `winlogbeat_download_mode: delegated` |
-| `winlogbeat_download_delegate_platform` | `auto` | Delegate platform: `auto`, `posix`, or `windows` |
-| `winlogbeat_download_delegate_cache_dir` | platform-specific | Cache directory on the delegated download host |
-| `winlogbeat_controller_cache_dir` | `{{ lookup('env', 'HOME') }}/.cache/ansible/winlogbeat` | Controller cache used while transferring the delegated ZIP to Windows targets |
-
-By default each Windows target downloads the Winlogbeat ZIP directly from `winlogbeat_download_url`:
-
-```yaml
-winlogbeat_download_mode: target
-```
-
-For environments where Windows targets or the Ansible controller cannot access the internet, use a delegated download host that has internet access and Ansible connectivity. The controller does not download from the internet in this mode; it only fetches the already downloaded ZIP from the delegate and copies it to the Windows targets.
-
-```yaml
-winlogbeat_download_mode: delegated
-winlogbeat_download_delegate: downloadhost.example.com
-winlogbeat_download_delegate_cache_dir: /var/cache/ansible/winlogbeat
-winlogbeat_controller_cache_dir: /var/tmp/ansible-winlogbeat-cache
-```
-
-If the delegated download host is a Windows host, either let the role auto-detect WinRM/PSRP or force the platform:
-
-```yaml
-winlogbeat_download_mode: delegated
-winlogbeat_download_delegate: windows-downloadhost.example.com
-winlogbeat_download_delegate_platform: windows
-winlogbeat_download_delegate_cache_dir: 'C:\Windows\Temp\winlogbeat-delegate'
-winlogbeat_controller_cache_dir: /var/tmp/ansible-winlogbeat-cache
-```
-
-In delegated mode, the delegated host downloads the ZIP once, the controller fetches it into a local cache, and the controller copies it to each Windows target over WinRM. The ZIP checksum is verified on the Windows target before extraction.
-
-Use `winlogbeat_download_delegate_platform: windows` when the delegated downloader is a Windows host and inventory auto-detection is not reliable. The role then uses Windows modules on the delegate (`win_file` and `win_get_url`) instead of POSIX modules.
-
-### Event Logs and Service
-
-| Variable | Default | Description |
-|---|---|---|
-| `winlogbeat_event_log_groups` | all keys from `winlogbeat_event_log_group_definitions` | Curated event-log groups to collect |
-| `winlogbeat_event_log_group_definitions` | see defaults | Built-in group-to-channel mapping |
-| `winlogbeat_event_logs` | unset | Complete manual event-channel override; if set, groups are ignored |
-| `winlogbeat_validate_event_channels` | `true` | Validate target event-channel availability during deployment |
-| `winlogbeat_report_unforwarded_event_channels` | `true` | Report target channels that contain records but are not selected for forwarding |
-| `winlogbeat_service_name` | `winlogbeat` | Windows service name |
-| `winlogbeat_service_state` | `started` | Desired service state |
-| `winlogbeat_service_enabled` | `true` | Auto-start on boot |
-
-By default, `winlogbeat_event_log_groups` selects all built-in groups from `winlogbeat_event_log_group_definitions`. Override it when a host class should collect only selected categories:
+Use a narrow selection where it fits the host role:
 
 ```yaml
 winlogbeat_event_log_groups:
@@ -140,115 +65,37 @@ winlogbeat_event_log_groups:
   - task_scheduler
 ```
 
-Built-in groups include `baseline`, `powershell`, `task_scheduler`, `applocker`, `rds`, `user_profile`, `fslogix`, `citrix`, `code_integrity`, `laps`, `storage`, `remote_management`, `defender_firewall`, `windows_update`, `network`, `smb`, `device_lifecycle`, `diagnostics`, `identity`, `server_manager`, `file_services`, `hyper_v`, `printing`, `remote_assistance`, `security_hardening`, `setup_provisioning`, `time_service`, `volume_shadow_copy`, `openssh`, `exchange`, `application_platform`, `application_compatibility`, `appx_store`, `desktop_experience`, `telemetry_privacy`, `licensing`, `domain_services`, `dfs`, `dns`, `dhcp_server`, `deployment_services`, and `application_specific`.
+In delegated mode, the download delegate retrieves the ZIP, the controller
+fetches it to its cache, then copies it to Windows targets. The ZIP checksum
+is always verified on the Windows target before extraction.
 
-## Checking Windows Event Log Coverage
-
-The role checks event-log coverage in two directions in a single report:
-
-1. Selected channels that are missing on the target.
-2. Target channels that contain records on Windows but are not selected for Winlogbeat forwarding to Graylog.
-
-The coverage report shows the configured channels first, including whether each selected path exists and how many records it currently contains. This helps identify configured paths that are empty, nearly empty, or absent on the target. It then shows populated target channels that are not currently collected. During deployment, the role prints:
-
-```text
-Configured Windows Event Log channels selected for Winlogbeat forwarding on <host>:
-configured_count=<number>
-[<channel path> (records=<count>), <channel path> (records=0), <channel path> (missing), ...]
-Windows Event Log channels with records on <host> but not selected for Winlogbeat forwarding:
-unforwarded_count=<number>
-[<channel path> (records=<count>), <channel path> (records=<count>), ...]
-```
-
-Channels with zero records are included in the configured-channel list when selected, so you can see which configured paths are empty or rarely used. Zero-record channels are still ignored by the unforwarded report because they are not evidence of missed data yet.
-
-The channel names are the Windows Event Log tree paths, for example:
-
-```text
-Application (records=123)
-Security (records=456)
-System (records=789)
-Microsoft-Windows-TerminalServices-LocalSessionManager/Operational (records=12)
-Microsoft-Windows-WinRM/Operational (records=34)
-```
-
-Use this output to decide whether a host class needs another group in `winlogbeat_event_log_groups`, or a direct `winlogbeat_event_logs` override.
-
-Set this to disable the coverage report while keeping selected-channel validation enabled:
+## Uninstall
 
 ```yaml
-winlogbeat_report_unforwarded_event_channels: false
+- name: Remove Windows event forwarding
+  hosts: windows
+  gather_facts: true
+  tasks:
+    - ansible.builtin.include_role:
+        name: tuxbull.winlogbeat_forwarder
+        tasks_from: uninstall.yml
 ```
 
-The role only reports missing channels that are part of the **effective Winlogbeat configuration**. It does not compare against every possible built-in group.
+The uninstall task stops and removes the service, then removes the installation,
+data, log, and temporary download directories.
 
-If you override `winlogbeat_event_log_group_definitions`, Ansible replaces the complete group definition map. For example, this config only defines `Application` for `baseline`:
+## Validation
 
-```yaml
-vars:
-  winlogbeat_event_log_group_definitions:
-    baseline:
-      - name: Application
+After a deployment, verify the Windows service and rendered configuration:
+
+```powershell
+Get-Service winlogbeat
+& 'C:\Program Files\Winlogbeat\current\winlogbeat.exe' test config -c 'C:\Program Files\Winlogbeat\current\winlogbeat.yml' -e
 ```
 
-With that input, the role can only check/report `Application`. It will not report `System`, `Security`, PowerShell, or Task Scheduler as missing because they are no longer selected.
-
-To test whether specific channels are available on a host, use `winlogbeat_event_logs` as an explicit checklist:
-
-```yaml
-vars:
-  winlogbeat_event_logs:
-    - name: Application
-    - name: System
-    - name: Security
-    - name: Microsoft-Windows-PowerShell/Operational
-    - name: Windows PowerShell
-    - name: Microsoft-Windows-TaskScheduler/Operational
-    - name: Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational
-    - name: Microsoft-FSLogix-Apps/Operational
-```
-
-During deployment, the role marks selected channels as `(missing)` inside the configured-channel list when a selected channel is absent. There is no separate missing-only report.
-
-Use `ignore_missing_channel: false` when a channel is mandatory for a host class:
-
-```yaml
-winlogbeat_version: '9.4.2'
-```
-
-The role uses Elastic's OSS-only ZIP artifacts (`winlogbeat-oss-<version>-windows-x86_64.zip`) for Apache 2.0 licensing. The OSS ZIP still extracts to `winlogbeat-<version>-windows-x86_64`, so the same service scripts and junction-based installer workflow are used.
-
-Upgrade workflow:
-1. Stop service -> extract ZIP -> repoint `current` junction
-2. Deploy config -> install service -> start service
-3. Clean up old versions beyond `winlogbeat_retention_versions` (default: keep 3)
-4. Remove any legacy `backup` directory left by older role versions
-5. The old version folder remains intact until it exceeds retention - no separate backup copy is created
-
----
-
-## Installation
-
-```bash
-git clone https://github.com/joe-speedboat/ansible.winlogbeat_forwarder.git /etc/ansible/roles/joe-speedboat.winlogbeat_forwarder
-```
-
-Or via Galaxy (once published):
-
-```bash
-ansible-galaxy role install joe-speedboat.winlogbeat_forwarder
-```
-
-## Graylog Search
-
-Useful validation queries:
-
-```text
-winlog_channel:Application AND agent_type:winlogbeat
-winlog_channel:Security AND agent_type:winlogbeat
-winlog_provider_name:<provider> AND agent_type:winlogbeat
-winlogbeat_forwarder:true
-```
+For receiver proof, search Graylog by a unique controlled event marker and
+verify `source`, `winlog_channel`, `winlog_provider_name`, `winlog_event_id`,
+and `agent_type:winlogbeat`.
 
 ## License
 

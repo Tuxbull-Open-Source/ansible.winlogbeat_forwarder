@@ -1,44 +1,15 @@
 # Changelog
 
-## [Unreleased]
-
-No unreleased changes.
-
-## [v1.2.0] - 2026-06-30
-
-### Added
-
-- Add delegated Winlogbeat ZIP download mode for air-gapped controllers, allowing a separate download host to fetch the artifact before it is copied to Windows targets.
-- Support Windows hosts as delegated Winlogbeat download hosts by using Windows modules when the delegate uses WinRM/PSRP or `winlogbeat_download_delegate_platform: windows` is set.
+## v1.3.0 - 2026-11-03
 
 ### Changed
 
-- Clarify delegated download documentation for air-gapped controllers and production-tested Windows delegated download hosts.
+- Migrate Galaxy identity to `tuxbull.winlogbeat_forwarder`.
+- Align the role dispatcher with the current Enterprise Ansible Role Template.
+- Add Galaxy-ready metadata, controller collection requirements, maintainer
+  guidance, and public role documentation.
 
-## [v1.1.1] - 2026-06-30
+### Verified
 
-### Changed
-
-- Add all non-zero unforwarded production channels from the latest coverage output into curated default event-log groups.
-- Allow Windows Server 2019 targets by lowering the minimum supported Windows build to `10.0.17763`.
-- Remove the redundant compact missing-channel report because the full channel coverage report already marks configured paths as `missing`.
-
-## [v1.1.0] - 2026-06-29
-
-### Changed
-
-- Add configured event-log channel details to the coverage report, including per-channel record counts and missing status.
-- Select all built-in event-log groups by default while keeping a commented small baseline example for users who want to manually pick categories.
-- Add more optional Windows event-log groups from additional production coverage reports, including certificates/identity, diagnostics, file services, Hyper-V, OpenSSH, printing, remote assistance, security hardening, setup/provisioning, time service, volume shadow copy, Exchange, and expanded RDS/SMB/storage/network coverage.
-
-## [v1.0.1] - 2026-06-29
-
-### Added
-
-- Add `AGENT.md` maintainer guidance for agents working on the role, including validation workflow and the pattern for deriving useful optional event-log groups from pasted Ansible coverage output.
-
-### Changed
-
-- Add optional Windows-native event-log groups for remote management, Defender/firewall, Windows Update, network, SMB, device lifecycle, diagnostics, identity, server manager, RDS, and storage coverage.
-- Add deployment-time reporting for Windows Event Log channels that contain records on the target but are not selected for Winlogbeat forwarding.
-- Remove leftover Linux-role references from the Windows-only role and render `winlogbeat_forwarder: "true"` as the role marker field.
+- Disposable Windows Server 2022 install, configuration validation, Graylog
+  event receipt, uninstall cleanup, final reinstall, and idempotency validation.
